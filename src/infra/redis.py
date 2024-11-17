@@ -1,5 +1,4 @@
-# infrastructure/redis.py
-from typing import Any
+from typing import Any, Optional
 from redis.asyncio import Redis
 import json
 from datetime import datetime, timezone
@@ -33,9 +32,14 @@ class RedisEventStore(EventStore):
     async def write_event(self, event: Event) -> str:
         event_data = {
             'name': event.name,
-            'data': json.dumps(event.data),
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'data': json.dumps(event.data)
         }
+        # Add timestamp if not provided
+        if hasattr(event, 'timestamp') and event.timestamp:
+            event_data['timestamp'] = event.timestamp
+        else:
+            event_data['timestamp'] = datetime.now(timezone.utc).isoformat()
+
         try:
             message_id = await self.redis.xadd(event.name, event_data)
             return message_id.decode()
@@ -61,15 +65,22 @@ class RedisEventStore(EventStore):
                 for _, message_list in messages:
                     for message_id, data in message_list:
                         message_id = message_id.decode()
-                        decoded_data = {
-                            k.decode(): json.loads(v.decode()) 
-                            for k, v in data.items()
-                        }
                         
+                        # Decode message data
+                        decoded_data = {}
+                        for k, v in data.items():
+                            key = k.decode()
+                            value = v.decode()
+                            if key == 'data':
+                                decoded_data[key] = json.loads(value)
+                            else:
+                                decoded_data[key] = value
+
                         event = Event(
                             id=message_id,
-                            data=decoded_data['data'],
-                            timestamp=decoded_data['timestamp']
+                            name=decoded_data['name'],
+                            data=decoded_data['data']
+                            # timestamp is optional
                         )
 
                         try:

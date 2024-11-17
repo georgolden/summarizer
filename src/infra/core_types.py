@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Protocol, Any
+from typing import Protocol, Any, Optional
 from typing_extensions import Callable
 
 @dataclass
@@ -7,7 +7,7 @@ class Event:
     id: str
     name: str
     data: Any
-    timestamp: str
+    timestamp: Optional[str] = None
 
 class FileStorage(Protocol):
     async def read(self, path: str) -> bytes: ...
