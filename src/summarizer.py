@@ -69,7 +69,7 @@ class SummarizerMicroservice:
             print(f"Fatal error in {ServiceConfig.NAME} service: {e}")
             raise
         finally:
-            await self.redis.close()
+            await self.redis.aclose()
 
 def main():
     """Entry point for the summarizer microservice"""

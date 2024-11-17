@@ -199,7 +199,7 @@ async def test_write_event_with_special_characters(event_store):
 # Connection and Error Cases
 @pytest.mark.asyncio
 async def test_write_event_redis_connection_error():
-    bad_client = Redis(host='localhost', port=6380)  # Wrong port
+    bad_client = Redis(host='0.0.0.0', port=6380)  # Wrong port
     store = RedisEventStore(
         redis=bad_client,
         event_name="transcriptions_created",
