@@ -76,23 +76,23 @@ Coverage report will be generated showing which code paths are tested.
 ```
 summarizer/                      # Root project directory
 ├── src/
-│   ├── summarizer/             # Main package
+│   ├── summarizer.py
+│   ├── __init__.py
+│   ├── domain/
 │   │   ├── __init__.py
-│   │   ├── domain/
+│   │   ├── handler/
 │   │   │   ├── __init__.py
-│   │   │   ├── handler/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── get_summary.py
-│   │   │   ├── constants.py
-│   │   │   ├── dependencies.py
-│   │   │   ├── prompt_builder.py
-│   │   │   └── types.py
-│   │   └── infra/
-│   │       ├── __init__.py
-│   │       ├── core_types.py
-│   │       ├── minio.py
-│   │       └── redis.py
-│   └── tests/                  # Test package
+│   │   │   └── get_summary.py
+│   │   ├── constants.py
+│   │   ├── dependencies.py
+│   │   ├── prompt_builder.py
+│   │   └── types.py
+│   └── infra/
+│       ├── __init__.py
+│       ├── core_types.py
+│       ├── minio.py
+│       └── redis.py
+└── tests/                  # Test package
 │       ├── __init__.py
 │       └── domain/
 │           ├── __init__.py
