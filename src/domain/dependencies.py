@@ -1,5 +1,5 @@
 from typing import Any
-from ..infra.core_types import FileStorage, EventStore
+from infra.core_types import FileStorage, EventStore
 
 class Dependencies:
     def __init__(

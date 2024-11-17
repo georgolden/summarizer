@@ -4,12 +4,12 @@ from typing import Any
 from dotenv import load_dotenv
 from redis.asyncio import Redis
 import anthropic
-from .domain.constants import ServiceConfig
-from .infra.core_types import FileStorage
-from .infra.minio import MinioFileStorage
-from .infra.redis import RedisEventStore
-from .domain.handler.get_summary import get_summary
-from .domain.dependencies import Dependencies
+from domain.constants import ServiceConfig
+from infra.core_types import FileStorage
+from infra.minio import MinioFileStorage
+from infra.redis import RedisEventStore
+from domain.handler.get_summary import get_summary
+from domain.dependencies import Dependencies
 
 class SummarizerMicroservice:
     """

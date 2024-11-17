@@ -1,0 +1,26 @@
+[project]
+name = "summarizer"
+version = "0.1.0"
+description = "Summarizer microservice"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic==0.39.0",
+    "python-dotenv==1.0.1",
+    "typing-extensions==4.12.2",
+    "redis==5.2.0",
+    "minio==7.2.10",
+    "aiohttp==3.11.2",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["src/tests"]
+asyncio_mode = "auto"
+asyncio_fixture_loop_scope = "function"

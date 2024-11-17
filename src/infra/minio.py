@@ -1,6 +1,6 @@
 from minio import Minio
 from minio.error import S3Error
-from .core_types import FileStorage
+from infra.core_types import FileStorage
 import io
 import asyncio
 from functools import partial

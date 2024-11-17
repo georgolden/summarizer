@@ -3,7 +3,7 @@ from typing import Any
 from redis.asyncio import Redis
 import json
 from datetime import datetime, timezone
-from .core_types import Event, EventStore
+from infra.core_types import Event, EventStore
 
 class RedisEventStore(EventStore):
     def __init__(

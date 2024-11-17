@@ -1,5 +1,5 @@
 from typing import List, Dict
-from .types import ClaudeMessage
+from domain.types import ClaudeMessage
 
 class SummaryPromptBuilder:
     def __init__(self):

@@ -1,172 +1,157 @@
-# Transcription Summarization Tool
+# Summarizer Microservice
 
-A Python script that processes transcription files and generates comprehensive summaries using the Anthropic Claude API.
+A microservice that processes transcriptions and generates summaries using Claude AI.
 
 ## Features
+- Process multiple transcriptions in parallel
+- Generate summaries using Claude 3.5 Sonnet
+- Store results in Redis event store
+- File storage support via MinIO
 
-- Processes multiple transcription files
-- Extracts common titles from filenames
-- Generates structured summaries using Claude AI
-- Saves summaries with timestamps
-- Handles file encoding and error cases
-- Supports batch processing
-
-## Prerequisites
-
-- Python 3.8+
-- Anthropic API key
+## Requirements
+- Python >= 3.10
+- Redis
+- MinIO
+- Claude API key
 
 ## Installation
 
-### Option 1: Local Installation with Virtual Environment
-
 1. Clone the repository:
 ```bash
 git clone git@github.com:georgolden/summarizer.git
 cd summarizer
-```
 
 2. Create and activate virtual environment:
 ```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install required packages:
+3. Install dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -e ".[test]"  # Install with test dependencies
+# OR
+pip install .  # Install without test dependencies
 ```
 
-4. Create a .env file in the project root:
+## Configuration
+
+Create `.env` file in project root:
+```env
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# MinIO
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=transcriptions
+MINIO_SECURE=False
+
+# Anthropic
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+## Running Tests
+
+Run all tests with coverage:
 ```bash
-echo "ANTHROPIC_API_KEY=your-api-key-here" > .env
+pytest
 ```
 
-### Option 2: Docker Installation
-
-1. Clone the repository:
+Run specific test file:
 ```bash
-git clone git@github.com:georgolden/summarizer.git
-cd summarizer
+pytest src/tests/domain/handler/test_get_summary.py
 ```
 
-2. Create a .env file with your Anthropic API key:
+Run tests with detailed output:
 ```bash
-echo "ANTHROPIC_API_KEY=your-api-key-here" > .env
+pytest -v
 ```
 
-3. Build and run the Docker container:
-```bash
-# Build the image
-docker build -t transcription-summarizer .
+Coverage report will be generated showing which code paths are tested.
 
-# Run the container with mounted volumes
-docker run --env-file .env \
-  -v "$(pwd)/transcriptions:/app/transcriptions" \
-  -v "$(pwd)/summaries:/app/summaries" \
-  transcription-summarizer
+## Project Structure
 ```
-
-## Usage
-
-1. Place your transcription files in the `transcriptions` directory
-
-2. Run the script:
-   
-   With virtual environment:
-   ```bash
-   # Activate venv if not already activated
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
-   
-   # Run script
-   python script.py
-   ```
-
-   With Docker:
-   ```bash
-   docker run --env-file .env \
-     -v "$(pwd)/transcriptions:/app/transcriptions" \
-     -v "$(pwd)/summaries:/app/summaries" \
-     transcription-summarizer
-   ```
-
-3. Check the `summaries` directory for the generated summary files
-
-## Directory Structure
-
-```
-.
-├── script.py
-├── requirements.txt
-├── Dockerfile
+summarizer/                      # Root project directory
+├── src/
+│   ├── summarizer/             # Main package
+│   │   ├── __init__.py
+│   │   ├── domain/
+│   │   │   ├── __init__.py
+│   │   │   ├── handler/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── get_summary.py
+│   │   │   ├── constants.py
+│   │   │   ├── dependencies.py
+│   │   │   ├── prompt_builder.py
+│   │   │   └── types.py
+│   │   └── infra/
+│   │       ├── __init__.py
+│   │       ├── core_types.py
+│   │       ├── minio.py
+│   │       └── redis.py
+│   └── tests/                  # Test package
+│       ├── __init__.py
+│       └── domain/
+│           ├── __init__.py
+│           └── handler/
+│               ├── __init__.py
+│               └── test_get_summary.py
 ├── .env
-├── transcriptions/
-│   └── (your transcription files)
-└── summaries/
-    └── (generated summary files)
+└── pyproject.toml
 ```
 
-## File Naming
+## Running the Service
 
-The script expects transcription files to follow a pattern like:
-```
-transcription_<uuid>_<title>-<part>.txt
-```
-
-Generated summaries will be named:
-```
-<title>_YYYYMMDD_HHMMSS.md
-```
-
-## Development
-
-### Virtual Environment Tips
-- Always activate the virtual environment before working on the project
-- If you install new packages, update requirements.txt:
+From project root:
 ```bash
-pip freeze > requirements.txt
-```
-- To deactivate the virtual environment:
-```bash
-deactivate
+python src/summarizer.py
 ```
 
-### Docker Development Tips
-- Build new image after requirements changes:
-```bash
-docker build -t transcription-summarizer .
+## API Reference
+
+### Input Event Structure
+```python
+{
+    "id": "event-id",
+    "name": "transcriptions_created",
+    "data": [
+        {
+            "title": "Talk Title",
+            "path": "storage/path/to/transcription.txt"
+        }
+    ],
+    "timestamp": "2024-01-01T00:00:00Z"
+}
 ```
-- Run with mounted volumes for development:
-```bash
-docker run --env-file .env \
-  -v "$(pwd)/transcriptions:/app/transcriptions" \
-  -v "$(pwd)/summaries:/app/summaries" \
-  transcription-summarizer
-```
-- Check container logs:
-```bash
-docker logs <container-id>
+
+### Output Event Structure
+```python
+{
+    "name": "summary_created",
+    "data": {
+        "title": "Talk Title",
+        "summary": "Generated summary text..."
+    }
+}
 ```
 
 ## Error Handling
+- Invalid transcription data throws ValueError
+- File read errors are propagated from storage
+- Claude API errors are propagated
+- Empty or invalid summaries throw ValueError
 
-The script includes error handling for:
-- Missing API keys
-- File not found errors
-- File reading errors
-- API errors
-- Invalid file formats
+## Development
 
-## Contributing
+Install development dependencies:
+```bash
+pip install -e ".[test]"
+```
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-[MIT](LICENSE)
+Run tests while developing:
+```bash
+pytest -v --cov=summarizer --cov-report=term-missing
+```
