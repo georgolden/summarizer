@@ -1,6 +1,6 @@
 from typing import List, Dict
 import asyncio
-from domain.types import Deps, SummaryCreatedEvent, TranscriptionsCreatedEvent
+from domain.types import Deps, SummaryCreatedEvent, TranscriptionCreatedEvent
 from domain.prompt_builder import SummaryPromptBuilder
 
 async def validate_transcriptions(transcriptions: List[Dict[str, str]]) -> None:
@@ -33,9 +33,9 @@ def extract_text_from_response(response) -> str:
 
     return combined_text
 
-async def get_summary(deps: Deps, event: TranscriptionsCreatedEvent) -> SummaryCreatedEvent:
+async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCreatedEvent:
     """
-    Process transcriptions and generate a summary using Claude API.
+    Process multiple transcriptions and generate a summary using Claude API.
     
     Args:
         deps: Dependencies container with required services
@@ -57,8 +57,12 @@ async def get_summary(deps: Deps, event: TranscriptionsCreatedEvent) -> SummaryC
         contents_bytes = await asyncio.gather(*content_tasks)
         contents = [content.decode('utf-8') for content in contents_bytes]
 
+        # Extract all titles
+        titles = [t['title'] for t in transcriptions]
+
         prompt_builder = SummaryPromptBuilder()
-        messages = prompt_builder.create_messages(transcriptions[0]['title'], contents)
+        # Update to pass all titles and contents
+        messages = prompt_builder.create_messages(titles, contents)
 
         response = await deps.anthropic_client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -70,13 +74,19 @@ async def get_summary(deps: Deps, event: TranscriptionsCreatedEvent) -> SummaryC
 
         summary = extract_text_from_response(response)
 
-        out_event = {
-            'name': "summary_created",
-            'data': {
-                'title': transcriptions[0]['title'],
+        # Create a combined title if multiple transcriptions
+        combined_title = (
+            titles[0] if len(titles) == 1 
+            else f"Summary of {len(titles)} transcriptions: {', '.join(titles[:3])}{'...' if len(titles) > 3 else ''}"
+        )
+
+        out_event = SummaryCreatedEvent(
+            name="summary_created",
+            data={
+                'title': combined_title,
                 'summary': summary
             }
-        }
+        )
 
         await deps.event_store.write_event(out_event)
         return out_event

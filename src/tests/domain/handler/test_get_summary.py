@@ -3,10 +3,9 @@ from unittest.mock import AsyncMock, Mock
 
 from domain.handler.get_summary import (
     get_summary, 
-    validate_transcriptions,
     extract_text_from_response
 )
-from domain.types import Deps, TranscriptionsCreatedEvent
+from domain.types import Deps, TranscriptionCreatedEvent, SummaryCreatedEvent
 
 @pytest.fixture
 def mock_deps():
@@ -25,15 +24,12 @@ def valid_transcriptions():
 
 @pytest.fixture
 def valid_event(valid_transcriptions):
-    return TranscriptionsCreatedEvent(
-        id="test-id",
+    return TranscriptionCreatedEvent(
         name="transcriptions_created",
-        data=valid_transcriptions,
-        timestamp="2024-01-01T00:00:00Z"
+        data=valid_transcriptions
     )
 
 def test_extract_text_from_response_single_content():
-    # Mock Claude's response format: [{"type": "text", "text": "Hi, I'm Claude."}]
     response = Mock()
     response.content = [{"type": "text", "text": "Test summary content"}]
     result = extract_text_from_response(response)
@@ -50,7 +46,7 @@ def test_extract_text_from_response_multiple_content():
 
 def test_extract_text_from_response_no_text_attribute():
     response = Mock()
-    response.content = [{"type": "image"}]  # No text field
+    response.content = [{"type": "image"}]
     with pytest.raises(ValueError, match="No valid text content"):
         extract_text_from_response(response)
 
@@ -58,7 +54,7 @@ def test_extract_text_from_response_mixed_content():
     response = Mock()
     response.content = [
         {"type": "text", "text": "Valid text"},
-        {"type": "image"},  # Should be skipped
+        {"type": "image"},
         {"type": "text", "text": "More valid text"}
     ]
     result = extract_text_from_response(response)
@@ -66,7 +62,6 @@ def test_extract_text_from_response_mixed_content():
 
 @pytest.mark.asyncio
 async def test_get_summary_success(mock_deps, valid_event):
-    # Setup mocks
     mock_deps.file_storage.read.side_effect = [b"First content", b"Second content"]
     mock_deps.anthropic_client.messages.create.return_value = Mock(
         content=[{"type": "text", "text": "Test summary"}]
@@ -74,31 +69,22 @@ async def test_get_summary_success(mock_deps, valid_event):
 
     result = await get_summary(mock_deps, valid_event)
 
-    # Verify calls
     assert mock_deps.file_storage.read.call_count == 2
-    mock_deps.event_store.write_event.assert_called_once_with({
-        'name': "summary_created",
-        'data': {
-            'title': "Test Talk",
+    expected_event = SummaryCreatedEvent(
+        name="summary_created",
+        data={
+            'title': "Summary of 2 transcriptions: Test Talk, Test Talk Part 2",
             'summary': "Test summary"
         }
-    })
-    assert result == {
-        'name': "summary_created",
-        'data': {
-            'title': "Test Talk",
-            'summary': "Test summary"
-        }
-    }
+    )
+    mock_deps.event_store.write_event.assert_called_once_with(expected_event)
+    assert result == expected_event
 
 @pytest.mark.asyncio
 async def test_get_summary_success_single_transcription(mock_deps):
-    # Test with single transcription
-    single_event = TranscriptionsCreatedEvent(
-        id="test-id",
+    single_event = TranscriptionCreatedEvent(
         name="transcriptions_created",
-        data=[{"title": "Single Talk", "path": "test/single.txt"}],
-        timestamp="2024-01-01T00:00:00Z"
+        data=[{"title": "Single Talk", "path": "test/single.txt"}]
     )
     
     mock_deps.file_storage.read.return_value = b"Test content"
@@ -108,40 +94,49 @@ async def test_get_summary_success_single_transcription(mock_deps):
 
     result = await get_summary(mock_deps, single_event)
 
-    assert isinstance(result, dict)
-    assert result['name'] == "summary_created"
-    assert result['data']['title'] == "Single Talk"
-    assert result['data']['summary'] == "Test summary"
+    expected_event = SummaryCreatedEvent(
+        name="summary_created",
+        data={
+            'title': "Single Talk",
+            'summary': "Test summary"
+        }
+    )
+    assert result == expected_event
     mock_deps.file_storage.read.assert_called_once()
-    mock_deps.event_store.write_event.assert_called_once_with(result)
+    mock_deps.event_store.write_event.assert_called_once_with(expected_event)
 
 @pytest.mark.asyncio
-async def test_get_summary_success_multiple_transcriptions(mock_deps, valid_event):
-    # Test with multiple transcriptions
-    mock_deps.file_storage.read.side_effect = [
-        b"First content",
-        b"Second content"
-    ]
+async def test_get_summary_success_many_transcriptions(mock_deps):
+    many_titles = [f"Talk {i}" for i in range(5)]
+    many_event = TranscriptionCreatedEvent(
+        name="transcriptions_created",
+        data=[{"title": title, "path": f"test/path{i}.txt"} for i, title in enumerate(many_titles)]
+    )
+    
+    mock_deps.file_storage.read.side_effect = [b"Content"] * 5
     mock_deps.anthropic_client.messages.create.return_value = Mock(
         content=[{"type": "text", "text": "Combined summary"}]
     )
 
-    result = await get_summary(mock_deps, valid_event)
+    result = await get_summary(mock_deps, many_event)
 
-    assert result['name'] == "summary_created"
-    assert result['data']['title'] == "Test Talk"
-    assert result['data']['summary'] == "Combined summary"
-    assert mock_deps.file_storage.read.call_count == 2
-    mock_deps.event_store.write_event.assert_called_once_with(result)
+    expected_title = "Summary of 5 transcriptions: Talk 0, Talk 1, Talk 2..."
+    expected_event = SummaryCreatedEvent(
+        name="summary_created",
+        data={
+            'title': expected_title,
+            'summary': "Combined summary"
+        }
+    )
+    assert result == expected_event
+    assert mock_deps.file_storage.read.call_count == 5
+    mock_deps.event_store.write_event.assert_called_once_with(expected_event)
 
 @pytest.mark.asyncio
 async def test_get_summary_invalid_transcription_data(mock_deps):
-    # Test with invalid transcription data
-    invalid_event = TranscriptionsCreatedEvent(
-        id="test-id",
+    invalid_event = TranscriptionCreatedEvent(
         name="transcriptions_created",
-        data=[{"title": "Invalid"}],  # Missing path
-        timestamp="2024-01-01T00:00:00Z"
+        data=[{"title": "Invalid"}]  # Missing path
     )
 
     with pytest.raises(ValueError, match="Invalid transcription format"):
@@ -151,7 +146,6 @@ async def test_get_summary_invalid_transcription_data(mock_deps):
 
 @pytest.mark.asyncio
 async def test_get_summary_file_read_error(mock_deps, valid_event):
-    # Test file reading error
     mock_deps.file_storage.read.side_effect = Exception("File not found")
 
     with pytest.raises(Exception, match="File not found"):
@@ -159,7 +153,6 @@ async def test_get_summary_file_read_error(mock_deps, valid_event):
 
 @pytest.mark.asyncio
 async def test_get_summary_claude_api_error(mock_deps, valid_event):
-    # Test Claude API error
     mock_deps.file_storage.read.return_value = b"Test content"
     mock_deps.anthropic_client.messages.create.side_effect = Exception("API error")
 
@@ -168,7 +161,6 @@ async def test_get_summary_claude_api_error(mock_deps, valid_event):
 
 @pytest.mark.asyncio
 async def test_get_summary_empty_claude_response(mock_deps, valid_event):
-    # Test empty response from Claude
     mock_deps.file_storage.read.return_value = b"Test content"
     mock_deps.anthropic_client.messages.create.return_value = Mock(content=[])
 
@@ -177,10 +169,9 @@ async def test_get_summary_empty_claude_response(mock_deps, valid_event):
 
 @pytest.mark.asyncio
 async def test_get_summary_no_valid_text_content(mock_deps, valid_event):
-    # Test response with content but no valid text
     mock_deps.file_storage.read.return_value = b"Test content"
     mock_deps.anthropic_client.messages.create.return_value = Mock(
-        content=[{"type": "image"}]  # No text content
+        content=[{"type": "image"}]
     )
 
     with pytest.raises(ValueError, match="No valid text content in Claude API response"):
@@ -188,7 +179,6 @@ async def test_get_summary_no_valid_text_content(mock_deps, valid_event):
 
 @pytest.mark.asyncio
 async def test_get_summary_empty_summary_text(mock_deps, valid_event):
-    # Test empty summary text
     mock_deps.file_storage.read.return_value = b"Test content"
     mock_deps.anthropic_client.messages.create.return_value = Mock(
         content=[{"type": "text", "text": "   "}]
@@ -199,29 +189,7 @@ async def test_get_summary_empty_summary_text(mock_deps, valid_event):
 
 @pytest.mark.asyncio
 async def test_get_summary_utf8_decode_error(mock_deps, valid_event):
-    # Test UTF-8 decode error
     mock_deps.file_storage.read.return_value = b"\xff\xff\xff"  # Invalid UTF-8
 
     with pytest.raises(UnicodeDecodeError):
         await get_summary(mock_deps, valid_event)
-
-@pytest.mark.asyncio
-async def test_get_summary_preserves_original_title(mock_deps):
-    # Test that original title is preserved in output
-    title = "Special Title: With Punctuation! 123"
-    preserves_event = TranscriptionsCreatedEvent(
-        id="test-id",
-        name="transcriptions_created",
-        data=[{"title": title, "path": "test/path.txt"}],
-        timestamp="2024-01-01T00:00:00Z"
-    )
-    
-    mock_deps.file_storage.read.return_value = b"Test content"
-    mock_deps.anthropic_client.messages.create.return_value = Mock(
-        content=[{"type": "text", "text": "Summary"}]
-    )
-
-    result = await get_summary(mock_deps, preserves_event)
-
-    assert result['data']['title'] == title
-    mock_deps.event_store.write_event.assert_called_once_with(result)

@@ -1,18 +1,16 @@
 from dataclasses import dataclass
-from typing import Protocol, Any
+from typing import List, Protocol, Any
 from infra.core_types import EventStore, FileStorage
 
 @dataclass
-class TranscriptionData:
+class TranscriptionInfo:
     title: str
     path: str
 
 @dataclass
-class TranscriptionsCreatedEvent:
-    id: str
+class TranscriptionCreatedEvent:
     name: str
-    data: TranscriptionData
-    timestamp: str 
+    data: List[TranscriptionInfo]
 
 @dataclass
 class ClaudeMessage:
