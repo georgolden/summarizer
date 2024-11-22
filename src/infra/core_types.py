@@ -7,10 +7,12 @@ class Event:
     id: str
     name: str
     data: Any
+    meta: Any
     timestamp: Optional[str] = None
 
 class FileStorage(Protocol):
     async def read(self, path: str) -> bytes: ...
+    async def write(self, path: str, data: bytes) -> None: ...
 
 class EventStore(Protocol):
     async def write_event(self, data: Event) -> str: ...

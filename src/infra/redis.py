@@ -32,6 +32,7 @@ class RedisEventStore(EventStore):
     async def write_event(self, event: Event) -> str:
         event_data = {
             'name': event.name,
+            'meta': json.dumps(event.meta),
             'data': json.dumps(event.data)
         }
         # Add timestamp if not provided
@@ -71,7 +72,7 @@ class RedisEventStore(EventStore):
                         for k, v in data.items():
                             key = k.decode()
                             value = v.decode()
-                            if key == 'data':
+                            if key == 'data' or key == 'meta':
                                 decoded_data[key] = json.loads(value)
                             else:
                                 decoded_data[key] = value
@@ -79,6 +80,7 @@ class RedisEventStore(EventStore):
                         event = Event(
                             id=message_id,
                             name=decoded_data['name'],
+                            meta=decoded_data['meta'],
                             data=decoded_data['data']
                             # timestamp is optional
                         )
