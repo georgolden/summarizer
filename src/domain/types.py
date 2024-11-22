@@ -30,4 +30,5 @@ class Summary:
 @dataclass
 class SummaryCreatedEvent:
     name: str
+    meta: Any
     data: Summary

@@ -82,6 +82,7 @@ async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCr
 
         out_event = SummaryCreatedEvent(
             name="summary_created",
+            meta=event['meta'],
             data={
                 'title': combined_title,
                 'summary': summary
