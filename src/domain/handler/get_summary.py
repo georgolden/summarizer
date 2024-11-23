@@ -126,7 +126,7 @@ class KnowledgeExtractorPromptBuilder:
             messages.extend([
                 ClaudeMessage(
                     role="user",
-                    content=f"Content Section {i}:\n\n{chunk}\n\n{self._toc_prompt}"
+                    content=f"Content Section {i}:\n\n{chunk}\n\n{self._analysis_prompt}"
                 )
             ])
         
