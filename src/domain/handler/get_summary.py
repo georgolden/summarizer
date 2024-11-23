@@ -32,67 +32,67 @@ def extract_text_from_response(response) -> str:
 class KnowledgeExtractorPromptBuilder:
     def __init__(self):
         self._system_message = """You are an expert at extracting and structuring knowledge into universal, actionable frameworks.
-        Focus on principles and methodologies that can be applied across different domains."""
-        
+        Focus on principles and methodologies that can be applied."""
+
         self._analysis_prompt = """Analyze this content section and create a structured knowledge framework.
         For each major concept:
-        
+
         1. Core Definition
            - What it means in principle
            - How to recognize it
            - Why it matters
-        
+
         2. Universal Application
            - General principles
            - Domain-agnostic methodologies
            - Adaptation guidelines
-        
+
         3. Implementation Framework
            - Detection/Assessment methods
            - Step-by-step approach
            - Progress measurement
            - Common pitfalls
-        
+
         4. Integration Guide
            - How it connects with other concepts
            - Prerequisites if any
            - Next steps
-        
-        Format in Markdown with clear hierarchical structure. Avoid domain-specific examples.
-        Focus on creating a framework that could be applied to any field or skill."""
-        self._practical_guide_prompt = """Create a universal implementation guide based on the analyzed concepts.
-        
+
+        Format in Markdown with clear hierarchical structure.
+        Focus on creating a framework that could be applied."""
+        self._practical_guide_prompt = """Create an implementation guide based on the analyzed concepts.
+
         Structure your response as follows:
-        
+
         # Implementation Framework
-        
+
         ## 1. Assessment Phase
         - How to evaluate current state
         - Framework for identifying gaps
         - Measurement criteria
-        
+
         ## 2. Preparation Phase
         - Universal setup steps
         - Resource requirements
         - Prerequisite checklist
-        
+
         ## 3. Implementation Phase
         - Step-by-step methodology
         - Progress tracking methods
         - Adjustment triggers
-        
+
         ## 4. Evaluation & Iteration
         - Success criteria
         - Measurement framework
         - Iteration protocol
-        
+
         For each section:
         - Provide clear, actionable steps
         - Include verification methods
         - List potential obstacles and solutions
         - Define success criteria
-        
-        Keep all guidance domain-agnostic and universally applicable."""
+
+        Keep all guidance applicable."""
 
     def _estimate_tokens(self, text: str) -> int:
         return len(text) // 4
