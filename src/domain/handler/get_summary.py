@@ -1,9 +1,7 @@
+import asyncio
 from typing import List, Dict
 import logging
-import asyncio
 from domain.types import Deps, SummaryCreatedEvent, TranscriptionCreatedEvent, ClaudeMessage
-from domain.prompt_builder import SummaryPromptBuilder
-import math
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,20 +29,75 @@ def extract_text_from_response(response) -> str:
     
     raise ValueError("No valid text content in Claude API response")
 
-class ChunkedSummaryPromptBuilder:
+class KnowledgeExtractorPromptBuilder:
     def __init__(self):
-        self._system_message = """You are an experienced writer which can analyze and summarize and write articles from different text sources: lectures, interviews, tech talks, entertainment, etc."""
+        self._system_message = """You are an expert at extracting and structuring knowledge into universal, actionable frameworks.
+        Focus on principles and methodologies that can be applied across different domains."""
         
-        self._intermediate_prompt = """Analyze this content section and provide a detailed summary of its key points, main ideas, and important details. This is part of a larger piece - focus on extracting the essential information that should be included in the final summary."""
+        self._analysis_prompt = """Analyze this content section and create a structured knowledge framework.
+        For each major concept:
         
-        self._final_summary_prompt = """Using all the intermediate summaries provided, create a comprehensive final summary that captures the complete content. The summary should be coherent, well-structured, and maintain the context and relationships between different parts of the content."""
+        1. Core Definition
+           - What it means in principle
+           - How to recognize it
+           - Why it matters
+        
+        2. Universal Application
+           - General principles
+           - Domain-agnostic methodologies
+           - Adaptation guidelines
+        
+        3. Implementation Framework
+           - Detection/Assessment methods
+           - Step-by-step approach
+           - Progress measurement
+           - Common pitfalls
+        
+        4. Integration Guide
+           - How it connects with other concepts
+           - Prerequisites if any
+           - Next steps
+        
+        Format in Markdown with clear hierarchical structure. Avoid domain-specific examples.
+        Focus on creating a framework that could be applied to any field or skill."""
+        self._practical_guide_prompt = """Create a universal implementation guide based on the analyzed concepts.
+        
+        Structure your response as follows:
+        
+        # Implementation Framework
+        
+        ## 1. Assessment Phase
+        - How to evaluate current state
+        - Framework for identifying gaps
+        - Measurement criteria
+        
+        ## 2. Preparation Phase
+        - Universal setup steps
+        - Resource requirements
+        - Prerequisite checklist
+        
+        ## 3. Implementation Phase
+        - Step-by-step methodology
+        - Progress tracking methods
+        - Adjustment triggers
+        
+        ## 4. Evaluation & Iteration
+        - Success criteria
+        - Measurement framework
+        - Iteration protocol
+        
+        For each section:
+        - Provide clear, actionable steps
+        - Include verification methods
+        - List potential obstacles and solutions
+        - Define success criteria
+        
+        Keep all guidance domain-agnostic and universally applicable."""
 
     def _estimate_tokens(self, text: str) -> int:
-        # Rough estimation - about 4 chars per token
         return len(text) // 4
 
     def _chunk_content(self, content: str, max_tokens: int = 4000) -> List[str]:
-        # Split content into paragraphs
         paragraphs = content.split('\n\n')
         chunks = []
         current_chunk = []
@@ -65,7 +118,7 @@ class ChunkedSummaryPromptBuilder:
         
         return chunks
 
-    def create_intermediate_messages(self, content: str) -> List[Dict[str, str]]:
+    def create_analysis_messages(self, content: str) -> List[Dict[str, str]]:
         chunks = self._chunk_content(content)
         messages = []
         
@@ -73,18 +126,18 @@ class ChunkedSummaryPromptBuilder:
             messages.extend([
                 ClaudeMessage(
                     role="user",
-                    content=f"Content Section {i}:\n\n{chunk}\n\n{self._intermediate_prompt}"
+                    content=f"Content Section {i}:\n\n{chunk}\n\n{self._toc_prompt}"
                 )
             ])
         
         return [{"role": m.role, "content": m.content} for m in messages]
 
-    def create_final_summary_message(self, intermediate_summaries: List[str]) -> Dict[str, str]:
-        combined_summaries = "\n\n".join(f"Section {i+1} Summary:\n{summary}" 
-                                       for i, summary in enumerate(intermediate_summaries))
+    def create_practical_guide_message(self, analyses: List[str]) -> Dict[str, str]:
+        combined_analyses = "\n\n---\n\n".join(f"Analysis {i+1}:\n{analysis}" 
+                                             for i, analysis in enumerate(analyses))
         return {
             "role": "user",
-            "content": f"Here are the summaries of all content sections:\n\n{combined_summaries}\n\n{self._final_summary_prompt}"
+            "content": f"Based on these analyses:\n\n{combined_analyses}\n\n{self._practical_guide_prompt}"
         }
 
 async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCreatedEvent:
@@ -93,21 +146,20 @@ async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCr
         transcriptions = event.data
         await validate_transcriptions(transcriptions)
 
-        # Fetch all contents
         content_tasks = [deps.file_storage.read(t['path']) for t in transcriptions]
         contents_bytes = await asyncio.gather(*content_tasks)
         contents = [content.decode('utf-8') for content in contents_bytes]
         titles = [t['title'] for t in transcriptions]
 
-        prompt_builder = ChunkedSummaryPromptBuilder()
-        all_intermediate_summaries = []
+        prompt_builder = KnowledgeExtractorPromptBuilder()
+        all_analyses = []
 
-        # Process each content chunk
+        # Process each content for analysis
         for content in contents:
-            intermediate_messages = prompt_builder.create_intermediate_messages(content)
-            content_summaries = []
+            analysis_messages = prompt_builder.create_analysis_messages(content)
+            content_analyses = []
 
-            for message in intermediate_messages:
+            for message in analysis_messages:
                 response = deps.anthropic_client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=2000,
@@ -115,26 +167,39 @@ async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCr
                     system=prompt_builder._system_message,
                     messages=[message]
                 )
-                summary = extract_text_from_response(response)
-                content_summaries.append(summary)
+                analysis = extract_text_from_response(response)
+                content_analyses.append(analysis)
 
-            all_intermediate_summaries.extend(content_summaries)
+            all_analyses.extend(content_analyses)
 
-        # Generate final summary
-        final_message = prompt_builder.create_final_summary_message(all_intermediate_summaries)
-        final_response = deps.anthropic_client.messages.create(
+        # Generate practical implementation guide
+        practical_message = prompt_builder.create_practical_guide_message(all_analyses)
+        practical_response = deps.anthropic_client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=4000,
             temperature=0.5,
             system=prompt_builder._system_message,
-            messages=[final_message]
+            messages=[practical_message]
         )
-        final_summary = extract_text_from_response(final_response)
+        practical_guide = extract_text_from_response(practical_response)
+
+        # Combine analyses and practical guide into final markdown
+        final_output = f"""# Content Analysis and Implementation Guide
+
+## Content Overview
+{all_analyses[0]}  # First analysis contains ToC and key concepts
+
+## Detailed Analyses
+{'---'.join(all_analyses[1:])}  # Remaining detailed analyses
+
+## Practical Implementation Guide
+{practical_guide}
+"""
 
         # Create combined title
         combined_title = (
             titles[0] if len(titles) == 1 
-            else f"Summary of {len(titles)} transcriptions: {', '.join(titles[:3])}{'...' if len(titles) > 3 else ''}"
+            else f"Knowledge Extract of {len(titles)} transcriptions: {', '.join(titles[:3])}{'...' if len(titles) > 3 else ''}"
         )
 
         out_event = SummaryCreatedEvent(
@@ -142,7 +207,7 @@ async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCr
             meta=event.meta,
             data={
                 'title': combined_title,
-                'summary': final_summary
+                'summary': final_output
             }
         )
 
@@ -151,5 +216,5 @@ async def get_summary(deps: Deps, event: TranscriptionCreatedEvent) -> SummaryCr
         return out_event
         
     except Exception as e:
-        logger.error(f"Error processing summary: {e}")
+        logger.error(f"Error in knowledge extraction: {e}")
         raise
